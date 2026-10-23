@@ -1,11 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CARE_TYPES } from '@/lib/care';
 import { db, BUCKET, photoUrl } from '@/lib/supabase';
 import { errMsg } from '@/lib/api';
 import { resizeImage } from '@/lib/image';
+import { CATEGORIES, categorySuggestion, findSuggestion, guessCategory } from '@/lib/species';
+import type { Suggestion } from '@/lib/species';
+import { searchPlants } from '@/lib/wiki';
+import type { WikiResult } from '@/lib/wiki';
 import type { Plant, Task } from '@/lib/types';
 
 type CareState = { active: boolean; summer: string; winter: string; last: string };
@@ -36,6 +40,7 @@ function initialCares(tasks: Task[] | undefined): Record<string, CareState> {
 
 export default function PlantForm({ plant, tasks }: { plant?: Plant; tasks?: Task[] }) {
   const router = useRouter();
+  const isNew = !plant;
   const [name, setName] = useState(plant?.name ?? '');
   const [species, setSpecies] = useState(plant?.species ?? '');
   const [room, setRoom] = useState(plant?.room ?? '');
@@ -48,8 +53,115 @@ export default function PlantForm({ plant, tasks }: { plant?: Plant; tasks?: Tas
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Programme de soins automatique ---
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const [category, setCategory] = useState('');
+  // true dès que tu modifies toi-même un soin : on n'écrase plus rien automatiquement
+  const touched = useRef(false);
+  const exposureTouched = useRef(!!plant?.exposure);
+
+  // --- Recherche en ligne (Wikipédia) ---
+  const [results, setResults] = useState<WikiResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [picked, setPicked] = useState<WikiResult | null>(null);
+
+  useEffect(() => {
+    const q = species.trim();
+    if (!showResults || q.length < 3 || picked?.title === q) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setSearching(true);
+    const timer = setTimeout(() => {
+      searchPlants(q, ctrl.signal)
+        .then((r) => {
+          setResults(r);
+          setSearchErr(false);
+          setSearching(false);
+        })
+        .catch((e) => {
+          if (e?.name === 'AbortError') return;
+          setSearchErr(true);
+          setSearching(false);
+        });
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [species, showResults, picked]);
+
+  function pick(r: WikiResult) {
+    setPicked(r);
+    setSpecies(r.title);
+    setResults([]);
+    setShowResults(false);
+    touched.current = false;
+    setCategory('');
+  }
+
   function setCare(code: string, patch: Partial<CareState>) {
+    touched.current = true;
     setCares((prev) => ({ ...prev, [code]: { ...prev[code], ...patch } }));
+  }
+
+  /** Applique un programme conseillé (garde les dates de dernier soin déjà saisies). */
+  function applyProfile(s: Suggestion, force = false) {
+    setSuggestion(s);
+    setCares((prev) => {
+      const next: Record<string, CareState> = {};
+      for (const c of CARE_TYPES) {
+        const rule = s.profile.cares[c.code];
+        const cur = prev[c.code];
+        if (!rule) {
+          next[c.code] = cur;
+          continue;
+        }
+        next[c.code] = {
+          active: rule.active,
+          summer: rule.active ? String(rule.summer) : cur.summer,
+          winter: rule.active ? (rule.winter === null ? '' : String(rule.winter)) : cur.winter,
+          last: cur.last,
+        };
+      }
+      return next;
+    });
+    if (force || !exposureTouched.current) {
+      if (!exposureTouched.current || force) setExposure(s.profile.exposure);
+    }
+    touched.current = false;
+  }
+
+  // Détection automatique à la saisie du nom / de l'espèce (création uniquement, tant que rien n'est modifié à la main)
+  useEffect(() => {
+    if (!isNew || touched.current || category) return;
+    // 1) ma base de plantes courantes, 2) à défaut, un type déduit de la description Wikipédia
+    let found = findSuggestion(species, name);
+    if (!found && picked && picked.title === species.trim()) {
+      const g = guessCategory(picked.title, picked.extract);
+      if (g) found = { ...g, title: `${picked.title} · ${g.profile.label}` };
+    }
+    if (found) {
+      if (suggestion?.title !== found.title) applyProfile(found);
+    } else if (suggestion) {
+      setSuggestion(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, species, isNew, category, picked]);
+
+  function onCategory(code: string) {
+    setCategory(code);
+    const s = categorySuggestion(code);
+    if (s) applyProfile(s, true);
+  }
+
+  function reapply() {
+    const s = (category ? categorySuggestion(category) : null) ?? findSuggestion(species, name);
+    if (s) applyProfile(s, true);
   }
 
   function onFile(f: File | null) {
@@ -117,6 +229,8 @@ export default function PlantForm({ plant, tasks }: { plant?: Plant; tasks?: Tas
     }
   }
 
+  const canSuggest = !!suggestion || !!category || !!findSuggestion(species, name);
+
   return (
     <form onSubmit={submit}>
       {error && <div className="error">{error}</div>}
@@ -127,10 +241,49 @@ export default function PlantForm({ plant, tasks }: { plant?: Plant; tasks?: Tas
           Nom *
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ma grosse Monstera" />
         </label>
-        <label className="field">
-          Espèce
-          <input type="text" value={species} onChange={(e) => setSpecies(e.target.value)} placeholder="Monstera deliciosa" />
-        </label>
+        <div className="field">
+          <label htmlFor="plantes-species-input">Espèce (recherche en ligne)</label>
+          <input
+            id="plantes-species-input"
+            type="text"
+            autoComplete="off"
+            value={species}
+            onChange={(e) => {
+              setSpecies(e.target.value);
+              setShowResults(true);
+            }}
+            onFocus={() => setShowResults(true)}
+            placeholder="Tape au moins 3 lettres : monstera, pothos…"
+          />
+          {showResults && species.trim().length >= 3 && (searching || results.length > 0 || searchErr) && (
+            <div className="results">
+              {searching && <div className="result-msg">Recherche…</div>}
+              {searchErr && <div className="result-msg">Recherche indisponible, tu peux saisir l&apos;espèce à la main.</div>}
+              {results.map((r) => (
+                <button type="button" className="result" key={r.title} onClick={() => pick(r)}>
+                  {r.thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.thumb} alt="" className="thumb" />
+                  ) : (
+                    <div className="thumb">🌿</div>
+                  )}
+                  <span className="grow">
+                    <strong>{r.title}</strong>
+                    <span className="small muted result-extract">{r.extract}</span>
+                  </span>
+                </button>
+              ))}
+              {!searching && (
+                <div className="result-msg small">
+                  Source : Wikipédia ·{' '}
+                  <button type="button" className="linklike" onClick={() => setShowResults(false)}>
+                    Fermer
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <div className="grid2">
           <label className="field">
             Pièce
@@ -143,7 +296,13 @@ export default function PlantForm({ plant, tasks }: { plant?: Plant; tasks?: Tas
           </label>
           <label className="field">
             Exposition
-            <select value={exposure} onChange={(e) => setExposure(e.target.value)}>
+            <select
+              value={exposure}
+              onChange={(e) => {
+                exposureTouched.current = true;
+                setExposure(e.target.value);
+              }}
+            >
               <option value="">—</option>
               <option>Plein soleil</option>
               <option>Lumineux</option>
@@ -170,9 +329,47 @@ export default function PlantForm({ plant, tasks }: { plant?: Plant; tasks?: Tas
 
       <div className="card">
         <h2>Soins</h2>
+
+        {suggestion ? (
+          <div className="suggest">
+            <div>
+              <strong>✨ Programme conseillé : {suggestion.title}</strong>
+              <div className="small">{suggestion.profile.tip}</div>
+            </div>
+            <button type="button" className="btn sm" onClick={reapply}>
+              Réappliquer
+            </button>
+          </div>
+        ) : (
+          isNew && (
+            <p className="sub">
+              Tape l&apos;espèce ci-dessus et le programme se remplit tout seul, ou choisis un type de plante :
+            </p>
+          )
+        )}
+
+        <label className="field">
+          Type de plante (programme automatique)
+          <select value={category} onChange={(e) => onCategory(e.target.value)}>
+            <option value="">{suggestion && !category ? 'Détecté automatiquement' : '— Choisir —'}</option>
+            {Object.entries(CATEGORIES).map(([code, p]) => (
+              <option key={code} value={code}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {!isNew && canSuggest && !suggestion && (
+          <div style={{ marginBottom: 12 }}>
+            <button type="button" className="btn sm" onClick={reapply}>
+              ✨ Appliquer le programme conseillé
+            </button>
+          </div>
+        )}
+
         <p className="sub">
           Fréquences en jours. Hiver (nov. à mars) : laisse vide pour garder la fréquence d&apos;été, ou mets 0 pour
-          mettre le soin en pause.
+          mettre le soin en pause. Tu peux tout ajuster.
         </p>
         {CARE_TYPES.map((c) => {
           const s = cares[c.code];
