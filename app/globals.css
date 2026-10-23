@@ -209,3 +209,31 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--green); out
   .grid3 { grid-template-columns: 1fr; }
   .bar-row .lab { width: 100px; }
 }
+
+/* ---------- Programme conseillé ---------- */
+.suggest {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  background: var(--green-soft); border: 1px solid var(--green); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 12px; color: var(--text);
+}
+.suggest .small { color: var(--muted); margin-top: 2px; }
+
+/* ---------- Résultats de recherche en ligne ---------- */
+div.field { margin-bottom: 12px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+div.field > label { display: block; }
+.results {
+  margin-top: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+  overflow: hidden; font-weight: 400; color: var(--text);
+}
+.result {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px;
+  border: 0; border-bottom: 1px solid var(--line); background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 0.95rem; color: var(--text);
+}
+.result:active { background: var(--green-soft); }
+.result .grow { flex: 1; min-width: 0; }
+.result-extract {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 400;
+}
+.result-msg { padding: 8px 12px; color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+.linklike { background: none; border: 0; padding: 0; color: var(--green); text-decoration: underline; cursor: pointer; font: inherit; }
