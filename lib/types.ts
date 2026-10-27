@@ -21,6 +21,16 @@ export type Task = {
   active: boolean;
 };
 
+export type Wish = {
+  id: string;
+  genus: string;
+  name: string;
+  owned: boolean;
+  plant_id: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
 export type Log = {
   id: string;
   plant_id: string;
