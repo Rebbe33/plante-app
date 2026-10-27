@@ -38,11 +38,23 @@ function initialCares(tasks: Task[] | undefined): Record<string, CareState> {
   return out;
 }
 
-export default function PlantForm({ plant, tasks }: { plant?: Plant; tasks?: Task[] }) {
+export default function PlantForm({
+  plant,
+  tasks,
+  initial,
+  wishId,
+}: {
+  plant?: Plant;
+  tasks?: Task[];
+  /** préremplissage (ex. depuis la liste de souhaits) */
+  initial?: { name?: string; species?: string };
+  /** souhait à marquer comme acquis après la création */
+  wishId?: string;
+}) {
   const router = useRouter();
   const isNew = !plant;
-  const [name, setName] = useState(plant?.name ?? '');
-  const [species, setSpecies] = useState(plant?.species ?? '');
+  const [name, setName] = useState(plant?.name ?? initial?.name ?? '');
+  const [species, setSpecies] = useState(plant?.species ?? initial?.species ?? '');
   const [room, setRoom] = useState(plant?.room ?? '');
   const [exposure, setExposure] = useState(plant?.exposure ?? '');
   const [notes, setNotes] = useState(plant?.notes ?? '');
@@ -195,6 +207,11 @@ export default function PlantForm({ plant, tasks }: { plant?: Plant; tasks?: Tas
         const { data, error } = await db().from('plantes_plants').insert(fields).select('id').single();
         if (error) throw error;
         id = data.id as string;
+      }
+
+      if (wishId && !plant && id) {
+        // lie le souhait à la plante créée ; sans gravité si ça échoue
+        await db().from('plantes_wishlist').update({ owned: true, plant_id: id }).eq('id', wishId);
       }
 
       if (file && id) {
