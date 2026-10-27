@@ -237,3 +237,16 @@ div.field > label { display: block; }
 }
 .result-msg { padding: 8px 12px; color: var(--muted); font-size: 0.85rem; font-weight: 400; }
 .linklike { background: none; border: 0; padding: 0; color: var(--green); text-decoration: underline; cursor: pointer; font: inherit; }
+
+/* ---------- Liste de souhaits ---------- */
+.wish-group > summary { list-style: none; cursor: pointer; }
+.wish-group > summary::-webkit-details-marker { display: none; }
+.wish-group > summary::after { content: '▾'; color: var(--muted); font-size: 1.1rem; }
+.wish-group[open] > summary::after { content: '▴'; }
+.check {
+  width: 28px; height: 28px; flex: none; border-radius: 8px; border: 2px solid var(--line);
+  background: var(--card); color: #fff; font-size: 1rem; font-weight: 800; cursor: pointer; padding: 0;
+}
+.check.on { background: var(--green); border-color: var(--green); }
+.icon-btn { background: none; border: 0; color: var(--muted); font-size: 1rem; cursor: pointer; padding: 6px; }
+.nav a { font-size: 0.7rem; }
