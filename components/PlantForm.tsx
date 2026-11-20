@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CARE_TYPES } from '@/lib/care';
 import { db, BUCKET, photoUrl } from '@/lib/supabase';
-import { errMsg } from '@/lib/api';
+import { errMsg, loadSpots } from '@/lib/api';
+import { POT_DRAINAGES, POT_MATERIALS, spotSummary } from '@/lib/besoins';
 import { resizeImage } from '@/lib/image';
 import { CATEGORIES, categorySuggestion, findSuggestion, guessCategory } from '@/lib/species';
 import type { Suggestion } from '@/lib/species';
 import { searchPlants } from '@/lib/wiki';
 import type { WikiResult } from '@/lib/wiki';
-import type { Plant, Task } from '@/lib/types';
+import type { Plant, Spot, Task } from '@/lib/types';
 
 type CareState = { active: boolean; summer: string; winter: string; last: string };
 
@@ -59,6 +61,10 @@ export default function PlantForm({
   const [exposure, setExposure] = useState(plant?.exposure ?? '');
   const [notes, setNotes] = useState(plant?.notes ?? '');
   const [purchase, setPurchase] = useState(plant?.purchase_date ?? '');
+  const [spotId, setSpotId] = useState(plant?.spot_id ?? '');
+  const [potMaterial, setPotMaterial] = useState(plant?.pot_material ?? '');
+  const [potDrainage, setPotDrainage] = useState(plant?.pot_drainage ?? '');
+  const [spots, setSpots] = useState<Spot[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(photoUrl(plant?.photo_path));
   const [cares, setCares] = useState<Record<string, CareState>>(() => initialCares(tasks));
@@ -71,6 +77,13 @@ export default function PlantForm({
   // true dès que tu modifies toi-même un soin : on n'écrase plus rien automatiquement
   const touched = useRef(false);
   const exposureTouched = useRef(!!plant?.exposure);
+
+  // Emplacements enregistrés (liste vide tant que supabase/plantes_emplacements.sql n'a pas été lancé)
+  useEffect(() => {
+    loadSpots()
+      .then(setSpots)
+      .catch(() => setSpots([]));
+  }, []);
 
   // --- Recherche en ligne (Wikipédia) ---
   const [results, setResults] = useState<WikiResult[]>([]);
@@ -190,6 +203,13 @@ export default function PlantForm({
     setSaving(true);
     setError(null);
     try {
+      // Champs ajoutés par plantes_emplacements.sql : envoyés seulement s'ils servent, pour que le formulaire
+      // fonctionne aussi avant que le script soit lancé.
+      const extra: Record<string, string | null> = {};
+      if (spotId || plant?.spot_id) extra.spot_id = spotId || null;
+      if (potMaterial || plant?.pot_material) extra.pot_material = potMaterial || null;
+      if (potDrainage || plant?.pot_drainage) extra.pot_drainage = potDrainage || null;
+
       const fields = {
         name: name.trim(),
         species: species.trim() || null,
@@ -197,6 +217,7 @@ export default function PlantForm({
         exposure: exposure || null,
         notes: notes.trim() || null,
         purchase_date: purchase || null,
+        ...extra,
       };
 
       let id = plant?.id;
@@ -332,6 +353,51 @@ export default function PlantForm({
           Date d&apos;achat
           <input type="date" value={purchase} onChange={(e) => setPurchase(e.target.value)} />
         </label>
+
+        <div className="q-title">Emplacement et pot</div>
+        <label className="field">
+          Emplacement
+          <select value={spotId} onChange={(e) => setSpotId(e.target.value)}>
+            <option value="">— Aucun —</option>
+            {spots.map((sp) => (
+              <option key={sp.id} value={sp.id}>
+                {sp.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="small muted" style={{ marginTop: -4 }}>
+          {spots.find((sp) => sp.id === spotId)
+            ? spotSummary(spots.find((sp) => sp.id === spotId) as Spot)
+            : 'Décris la lumière, la température et l\'air de tes pièces pour que l\'appli juge si la plante est bien placée.'}{' '}
+          <Link href="/emplacements" className="linklike">
+            Gérer mes emplacements
+          </Link>
+        </p>
+        <div className="grid2">
+          <label className="field">
+            Pot
+            <select value={potMaterial} onChange={(e) => setPotMaterial(e.target.value)}>
+              <option value="">—</option>
+              {POT_MATERIALS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Drainage
+            <select value={potDrainage} onChange={(e) => setPotDrainage(e.target.value)}>
+              <option value="">—</option>
+              {POT_DRAINAGES.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <label className="field">
           Notes
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Arrosage par le bas, aime l'humidité…" />
