@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import BilanForm from '@/components/BilanForm';
 import PlantPhoto from '@/components/PlantPhoto';
 import { CARE_TYPES, dueLabel, fmtDate, isWinter, lateBy, nextDue, today } from '@/lib/care';
-import { errMsg, loadAll, markDone } from '@/lib/api';
-import type { Plant, Task } from '@/lib/types';
+import { errMsg, loadAll, loadSpots, markDone } from '@/lib/api';
+import type { Plant, Spot, Task } from '@/lib/types';
 
 type Data = { plants: Plant[]; tasks: Task[] };
 
@@ -13,6 +14,9 @@ export default function TodayPage() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [spots, setSpots] = useState<Spot[]>([]);
+  /** soin « bilan » dont le questionnaire est ouvert */
+  const [bilanOpen, setBilanOpen] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -25,6 +29,7 @@ export default function TodayPage() {
 
   useEffect(() => {
     load();
+    loadSpots().then(setSpots).catch(() => {});
   }, [load]);
 
   const plantById = useMemo(() => new Map((data?.plants ?? []).map((p) => [p.id, p])), [data]);
@@ -95,7 +100,7 @@ export default function TodayPage() {
               <h2>
                 {c.emoji} {c.label} <span className="muted">({list.length})</span>
               </h2>
-              {list.length > 1 && (
+              {list.length > 1 && c.code !== 'bilan' && (
                 <button className="btn sm" disabled={busy !== null} onClick={() => done(list, `all-${c.code}`)}>
                   Tout fait ✓
                 </button>
@@ -105,6 +110,25 @@ export default function TodayPage() {
               const p = plantById.get(t.plant_id);
               if (!p) return null;
               const late = lateBy(t) ?? 0;
+              const isBilan = t.care_type === 'bilan';
+              if (isBilan && bilanOpen === t.id) {
+                return (
+                  <div key={t.id} style={{ padding: '10px 12px' }}>
+                    <div className="name" style={{ marginBottom: 8 }}>
+                      {p.name}
+                    </div>
+                    <BilanForm
+                      plant={p}
+                      tasks={data?.tasks.filter((x) => x.plant_id === p.id) ?? []}
+                      spots={spots}
+                      onClose={() => {
+                        setBilanOpen(null);
+                        load();
+                      }}
+                    />
+                  </div>
+                );
+              }
               return (
                 <div className="row" key={t.id}>
                   <Link href={`/plantes/${p.id}`}>
@@ -118,9 +142,15 @@ export default function TodayPage() {
                     </div>
                   </div>
                   {late > 0 && <span className="badge late">{dueLabel(late)}</span>}
-                  <button className="btn primary sm" disabled={busy !== null} onClick={() => done([t], t.id)}>
-                    Fait ✓
-                  </button>
+                  {isBilan ? (
+                    <button className="btn primary sm" disabled={busy !== null} onClick={() => setBilanOpen(t.id)}>
+                      Faire le bilan
+                    </button>
+                  ) : (
+                    <button className="btn primary sm" disabled={busy !== null} onClick={() => done([t], t.id)}>
+                      Fait ✓
+                    </button>
+                  )}
                 </div>
               );
             })}
