@@ -22,6 +22,10 @@ export const CARE_TYPES: CareDef[] = [
 ];
 
 export function careInfo(code: string): CareDef {
+  // ligne d'historique créée quand un conseil du bilan est appliqué (pas un vrai soin)
+  if (code === 'ajustement') {
+    return { code, label: 'Ajustement du programme', emoji: '🔧', freqSummer: 0, freqWinter: null, defaultActive: false };
+  }
   return (
     CARE_TYPES.find((c) => c.code === code) ?? {
       code,
