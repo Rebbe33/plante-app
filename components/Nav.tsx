@@ -7,6 +7,7 @@ const ITEMS = [
   { href: '/', label: "Aujourd'hui", icon: '🌿' },
   { href: '/plantes', label: 'Plantes', icon: '🪴' },
   { href: '/souhaits', label: 'Souhaits', icon: '💚' },
+  { href: '/emplacements', label: 'Lieux', icon: '📍' },
   { href: '/bilan', label: 'Bilan', icon: '📊' },
 ];
 
