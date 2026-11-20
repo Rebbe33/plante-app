@@ -1,17 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import AdviceCard from '@/components/AdviceCard';
+import BilanForm from '@/components/BilanForm';
 import Conditions from '@/components/Conditions';
 import PlantPhoto from '@/components/PlantPhoto';
 import { HEALTH, careInfo, dueLabel, effectiveFreq, fmtDate, lateBy, nextDue } from '@/lib/care';
-import { addBilan, applyActions, deletePlant, errMsg, loadPlant, loadSpots, markDone, setArchived } from '@/lib/api';
-import { evaluateSpot, needsFor } from '@/lib/besoins';
-import { SOILS, SYMPTOM_GROUPS, buildAdvice, plantKind, soilLabel, symptomLabel } from '@/lib/diagnostic';
-import { CATEGORIES } from '@/lib/species';
-import type { Advice, Soil } from '@/lib/diagnostic';
+import { deletePlant, errMsg, loadPlant, loadSpots, markDone, setArchived } from '@/lib/api';
+import { plantKind, soilLabel, symptomLabel } from '@/lib/diagnostic';
 import type { Log, Plant, Spot, Task } from '@/lib/types';
 
 export default function PlantPage() {
@@ -24,17 +21,6 @@ export default function PlantPage() {
   const [spotsError, setSpotsError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  // Bilan
-  const [health, setHealth] = useState<number | null>(null);
-  const [soil, setSoil] = useState<Soil | null>(null);
-  const [symptoms, setSymptoms] = useState<string[]>([]);
-  const [note, setNote] = useState('');
-
-  // Conseils issus du dernier bilan
-  const [advice, setAdvice] = useState<Advice[] | null>(null);
-  const [applied, setApplied] = useState<string[]>([]);
-  const adviceRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -63,12 +49,6 @@ export default function PlantPage() {
   // type de plante déduit de l'espèce (null = non reconnu)
   const kind = useMemo(() => (plant ? plantKind(plant.species, plant.name) : null), [plant]);
 
-  useEffect(() => {
-    if (!advice) return;
-    const t = setTimeout(() => adviceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
-    return () => clearTimeout(t);
-  }, [advice]);
-
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     try {
@@ -79,35 +59,6 @@ export default function PlantPage() {
     } finally {
       setBusy(false);
     }
-  }
-
-  function toggleSymptom(code: string) {
-    setSymptoms((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
-  }
-
-  async function saveBilan() {
-    if (health === null) return;
-    const spot = spots.find((x) => x.id === plant?.spot_id) ?? null;
-    const placement = spot
-      ? { spotName: spot.name, issues: evaluateSpot(needsFor(plant?.species, plant?.name ?? ''), spot).issues }
-      : null;
-    const list = buildAdvice({ health, soil, symptoms, kind, tasks, placement });
-    await run(async () => {
-      await addBilan(id, health, note, soil, symptoms);
-      setAdvice(list);
-      setApplied([]);
-      setHealth(null);
-      setSoil(null);
-      setSymptoms([]);
-      setNote('');
-    });
-  }
-
-  async function applyAdvice(a: Advice) {
-    await run(async () => {
-      await applyActions(id, a.actions, a.title, kind);
-      setApplied((prev) => [...prev, a.id]);
-    });
   }
 
   async function remove() {
@@ -188,97 +139,13 @@ export default function PlantPage() {
       <Conditions plant={plant} tasks={tasks} spots={spots} spotsError={spotsError} kind={kind} onChanged={load} />
 
       <h2>Bilan santé</h2>
-      <div className="card">
-        {lastBilan && (
-          <p className="small muted" style={{ marginTop: 0 }}>
-            Dernier bilan ({fmtDate(lastBilan.done_on)}) : {HEALTH.find((h) => h.value === lastBilan.health)?.emoji}{' '}
-            {HEALTH.find((h) => h.value === lastBilan.health)?.label}
-          </p>
-        )}
-
-        <div className="q-title" style={{ marginTop: 0 }}>Comment va-t-elle ?</div>
-        <div className="health-btns">
-          {HEALTH.map((h) => (
-            <button key={h.value} type="button" className={health === h.value ? 'sel' : ''} onClick={() => setHealth(h.value)}>
-              <span className="e">{h.emoji}</span>
-              {h.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="q-title">
-          Terre au toucher <span className="muted">(enfonce un doigt à 3 cm)</span>
-        </div>
-        <div className="health-btns">
-          {SOILS.map((s) => (
-            <button
-              key={s.value}
-              type="button"
-              className={soil === s.value ? 'sel' : ''}
-              onClick={() => setSoil(soil === s.value ? null : s.value)}
-            >
-              <span className="e">{s.emoji}</span>
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        <p className="small muted" style={{ marginBottom: 0 }}>
-          Coche seulement ce que tu vois vraiment. Si tout va bien, ne coche rien.
+      {lastBilan && (
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Dernier bilan ({fmtDate(lastBilan.done_on)}) : {HEALTH.find((h) => h.value === lastBilan.health)?.emoji}{' '}
+          {HEALTH.find((h) => h.value === lastBilan.health)?.label}
         </p>
-        {SYMPTOM_GROUPS.map((g) => (
-          <div key={g.title}>
-            <div className="q-title">{g.title}</div>
-            <div className="chips">
-              {g.items.map((i) => (
-                <button
-                  key={i.code}
-                  type="button"
-                  className={`chip ${symptoms.includes(i.code) ? 'active' : ''}`}
-                  onClick={() => toggleSymptom(i.code)}
-                >
-                  {i.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        <label className="field" style={{ marginTop: 14 }}>
-          Autre observation (nouvelle pousse, fleur…)
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} style={{ minHeight: 56 }} />
-        </label>
-        <button className="btn primary" disabled={busy || health === null} onClick={saveBilan}>
-          Enregistrer le bilan
-        </button>
-      </div>
-
-      {advice && (
-        <div ref={adviceRef} style={{ scrollMarginTop: 12 }}>
-          <h2>Conseils selon ton bilan</h2>
-          <p className="small muted" style={{ marginTop: 0 }}>
-            {kind
-              ? `Conseils adaptés au type « ${CATEGORIES[kind]?.label ?? kind} », déduit de l'espèce. `
-              : "Type de plante non reconnu : conseils généraux (renseigne l'espèce dans « Modifier » pour des conseils plus précis). "}
-            Ce sont des suggestions : rien ne change sans ton accord. Après un ajustement, laisse 2 à 3 semaines à la
-            plante avant de réajuster.
-          </p>
-          {advice.map((a) => (
-            <AdviceCard
-              key={a.id}
-              advice={a}
-              tasks={tasks}
-              kind={kind}
-              done={applied.includes(a.id)}
-              busy={busy}
-              onApply={applyAdvice}
-            />
-          ))}
-          <button className="btn sm" onClick={() => setAdvice(null)}>
-            Fermer les conseils
-          </button>
-        </div>
       )}
+      <BilanForm plant={plant} tasks={tasks} spots={spots} onChanged={load} />
 
       <h2>Historique</h2>
       <div className="card flush">
