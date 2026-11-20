@@ -250,3 +250,33 @@ div.field > label { display: block; }
 .check.on { background: var(--green); border-color: var(--green); }
 .icon-btn { background: none; border: 0; color: var(--muted); font-size: 1rem; cursor: pointer; padding: 6px; }
 .nav a { font-size: 0.7rem; }
+
+/* ---------- Bilan détaillé et conseils ---------- */
+.q-title { font-weight: 700; font-size: 0.9rem; margin: 14px 0 8px; }
+.q-title .muted { font-weight: 400; font-size: 0.8rem; }
+.advice {
+  border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; background: var(--card);
+  padding: 12px 14px; margin-bottom: 10px;
+}
+.advice.ok { border-left-color: var(--green); }
+.advice.info { border-left-color: var(--blue); }
+.advice.adjust { border-left-color: var(--amber); }
+.advice.alert { border-left-color: var(--red); }
+.advice-title { font-weight: 700; margin-bottom: 4px; }
+.advice ul.changes {
+  margin: 10px 0; padding: 8px 12px 8px 28px; background: var(--green-soft);
+  border-radius: 10px; font-size: 0.9rem;
+}
+.advice .done-line { color: var(--green-dark); font-weight: 600; font-size: 0.9rem; margin-top: 8px; }
+
+/* ---------- Emplacements et conditions ---------- */
+.check-line { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 0.95rem; }
+.check-line input { width: 20px; height: 20px; accent-color: var(--green); flex: none; }
+ul.needs { margin: 0 0 8px; padding-left: 4px; list-style: none; }
+ul.needs li { padding: 3px 0; }
+.fit { font-weight: 700; margin-bottom: 8px; }
+.fit.ok { color: var(--green-dark); }
+.fit.warn { color: var(--amber); }
+.fit.alert { color: var(--red); }
+.row.bare { padding-left: 0; padding-right: 0; }
+.linklike { background: none; border: 0; padding: 0; color: var(--green); text-decoration: underline; cursor: pointer; font: inherit; }
